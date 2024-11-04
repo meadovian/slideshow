@@ -110,8 +110,78 @@ You can edit this file before confirming video creation to customize individual 
 
 ## Contributing
 
-[Your Contributing Guidelines Here]
+We welcome contributions from the community! Here's how you can help:
+
+### How to Contribute
+
+1. **Bug Reports**
+   - Use the GitHub Issues section to report bugs
+   - Provide detailed steps to reproduce the issue
+   - Include your system information (OS version, ffmpeg version)
+   - Share relevant error messages
+
+2. **Feature Requests**
+   - Submit feature requests through GitHub Issues
+   - Explain the use case for the feature
+   - Suggest implementation approaches if possible
+
+3. **Code Contributions**
+   - Fork the repository
+   - Create a feature branch (`git checkout -b feature/amazing-feature`)
+   - Commit your changes (`git commit -m 'Add amazing feature'`)
+   - Push to the branch (`git push origin feature/amazing-feature`)
+   - Open a Pull Request
+
+### Code Guidelines
+
+- Keep the bash script POSIX-compliant when possible
+- Add comments for complex operations
+- Update documentation for new features
+- Test your changes on different macOS versions
+- Maintain the existing error handling patterns
+
+### Documentation
+
+- Update the README.md if you add new features
+- Provide examples for new functionality
+- Keep the help function (`show_help`) up to date
+- Document any new dependencies
 
 ## License
 
-[Your License Information Here]
+MIT License
+
+Copyright (c) 2024 [Project Contributors]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Additional License Notes
+
+- This project is intended to be freely available for both personal and commercial use
+- You're welcome to use, modify, and distribute the code
+- Attribution is appreciated but not required
+- Contributions to this project will be subject to the same MIT license
+- The license applies to the script and documentation, not to videos created using the script
+
+## Community and Support
+
+- Questions can be asked via GitHub Issues
+- For extended discussions, use GitHub Discussions
+- Consider helping others by sharing your experiences and solutions
+- Join our community of contributors to make this tool even better!
