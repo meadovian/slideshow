@@ -1,0 +1,230 @@
+#!/bin/bash
+
+# Default values
+DEFAULT_DURATION=2          # Default duration per image in seconds
+DEFAULT_FRAMERATE=30        # Default output framerate
+DEFAULT_OUTPUT="output.mp4" # Default output filename
+DEFAULT_FADE=0.5           # Default fade duration in seconds (0 for no fade)
+DEFAULT_QUALITY="medium"    # Default encoding quality
+
+# Help function
+show_help() {
+    echo "Image Sequence to Video Converter"
+    echo "Usage: $0 /path/to/images/directory [options]"
+    echo ""
+    echo "Options:"
+    echo "  -d, --duration SECONDS    Default duration per image (default: $DEFAULT_DURATION)"
+    echo "  -o, --output FILENAME     Output filename (default: $DEFAULT_OUTPUT)"
+    echo "  -f, --framerate FPS       Output framerate (default: $DEFAULT_FRAMERATE)"
+    echo "  -q, --quality QUALITY     Encoding quality (low|medium|high, default: $DEFAULT_QUALITY)"
+    echo "  -t, --transition SECONDS  Fade transition duration (default: $DEFAULT_FADE, 0 for no fade)"
+    echo "  -h, --help               Show this help message"
+    echo ""
+    echo "Example:"
+    echo "  $0 ~/Desktop/my_images -d 3 -o myvideo.mp4 -t 0.5"
+}
+
+# Logging functions
+log_error() {
+    echo "ERROR: $1" >&2
+}
+
+log_debug() {
+    if [ "${DEBUG:-0}" -eq 1 ]; then
+        echo "DEBUG: $1"
+    fi
+}
+
+# Parse command line arguments
+POSITIONAL_ARGS=()
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -d|--duration)
+            DEFAULT_DURATION="$2"
+            shift 2
+            ;;
+        -o|--output)
+            DEFAULT_OUTPUT="$2"
+            shift 2
+            ;;
+        -f|--framerate)
+            DEFAULT_FRAMERATE="$2"
+            shift 2
+            ;;
+        -q|--quality)
+            DEFAULT_QUALITY="$2"
+            shift 2
+            ;;
+        -t|--transition)
+            DEFAULT_FADE="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*|--*)
+            echo "Unknown option $1"
+            show_help
+            exit 1
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Set quality presets
+case $DEFAULT_QUALITY in
+    low)
+        QUALITY_PARAMS="-preset faster -crf 28"
+        ;;
+    medium)
+        QUALITY_PARAMS="-preset medium -crf 23"
+        ;;
+    high)
+        QUALITY_PARAMS="-preset slower -crf 18"
+        ;;
+    *)
+        echo "Invalid quality setting. Using medium."
+        QUALITY_PARAMS="-preset medium -crf 23"
+        ;;
+esac
+
+# Check if ffmpeg is installed
+if ! command -v ffmpeg &> /dev/null; then
+    log_error "ffmpeg is not installed. Please install it using: brew install ffmpeg"
+    exit 1
+fi
+
+# Get working directory from positional arguments
+set -- "${POSITIONAL_ARGS[@]}"
+WORK_DIR="$1"
+
+if [ -z "$WORK_DIR" ]; then
+    log_error "Please provide the path to the images directory"
+    show_help
+    exit 1
+fi
+
+if [ ! -d "$WORK_DIR" ]; then
+    log_error "Directory $WORK_DIR does not exist"
+    exit 1
+fi
+
+# Create and prepare working directory
+prepare_working_directory() {
+    echo "Preparing working directory..."
+    
+    # Create tmp directory
+    TMP_DIR="$WORK_DIR/tmp"
+    mkdir -p "$TMP_DIR"
+    
+    # Create processing directory
+    PROCESS_DIR="$TMP_DIR/processing"
+    mkdir -p "$PROCESS_DIR"
+    
+    # Copy and rename files based on timestamp
+    echo "Organizing images..."
+}
+
+create_video() {
+    cd "$TMP_DIR" || exit 1
+    
+    # Get dimensions of the first PNG file for max size reference
+    local first_png
+    first_png=$(find "$TMP_DIR" -name "*.png" -type f | head -n 1)
+    
+    if [ ! -f "$first_png" ]; then
+        log_error "No PNG files found in directory"
+        exit 1
+    }
+    
+    # Get and adjust dimensions
+    MAX_WIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 "$first_png")
+    MAX_HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 "$first_png")
+    
+    # Ensure even dimensions
+    MAX_WIDTH=$((MAX_WIDTH - MAX_WIDTH % 2))
+    MAX_HEIGHT=$((MAX_HEIGHT - MAX_HEIGHT % 2))
+    
+    log_debug "Using dimensions: ${MAX_WIDTH}x${MAX_HEIGHT}"
+    
+    echo "Creating video..."
+    
+    # Build the complex filter string with optional transitions
+    FILTER_COMPLEX=""
+    INPUTS=""
+    count=0
+    
+    for img in image*.png; do
+        if [ -f "$img" ] && [ -r "$img" ]; then
+            # Get duration from durations.txt
+            if [ -r "durations.txt" ]; then
+                duration=$(grep "^$img=" durations.txt | cut -d= -f2)
+            else
+                duration=$DEFAULT_DURATION
+            fi
+            
+            if [ -z "$duration" ]; then
+                duration=$DEFAULT_DURATION
+            fi
+            
+            # Add input file
+            INPUTS="$INPUTS -loop 1 -t $duration -i \"$img\""
+            
+            # Add to filter complex with optional fade transition
+            if [ $count -gt 0 ] && [ $(echo "$DEFAULT_FADE > 0" | bc -l) -eq 1 ]; then
+                FILTER_COMPLEX="$FILTER_COMPLEX[$count:v]scale=${MAX_WIDTH}:${MAX_HEIGHT}:force_original_aspect_ratio=0,setsar=1:1,format=yuva420p,fade=in:st=0:d=${DEFAULT_FADE}:alpha=1[v${count}];"
+            else
+                FILTER_COMPLEX="$FILTER_COMPLEX[$count:v]scale=${MAX_WIDTH}:${MAX_HEIGHT}:force_original_aspect_ratio=0,setsar=1:1[v$count];"
+            fi
+            
+            echo "Processing $img (duration: $duration seconds)"
+            ((count++))
+        fi
+    done
+    
+    # Add the concat filter
+    for ((i=0; i<count; i++)); do
+        FILTER_COMPLEX="$FILTER_COMPLEX[v$i]"
+    done
+    FILTER_COMPLEX="${FILTER_COMPLEX}concat=n=$count:v=1:a=0[outv]"
+    
+    # Create the complete ffmpeg command with quality settings
+    CMD="ffmpeg -y -hide_banner -loglevel info $INPUTS -filter_complex \"$FILTER_COMPLEX\" -map \"[outv]\" -c:v libx264 ${QUALITY_PARAMS} -pix_fmt yuv420p -r $DEFAULT_FRAMERATE \"$OUTPUT_FILENAME\""
+    
+    echo "Executing ffmpeg command..."
+    eval "$CMD"
+    
+    # Check if video was created successfully
+    if [ ! -f "$OUTPUT_FILENAME" ]; then
+        log_error "Failed to create final video"
+        exit 1
+    fi
+    
+    # Move output video to original directory
+    mv "$OUTPUT_FILENAME" "$WORK_DIR/"
+    
+    echo "Video created successfully: $WORK_DIR/$OUTPUT_FILENAME"
+    echo "Processed $count images"
+    echo "Final video dimensions: ${MAX_WIDTH}x${MAX_HEIGHT}"
+    echo "Quality setting: $DEFAULT_QUALITY"
+    echo "Framerate: $DEFAULT_FRAMERATE fps"
+    
+    # Cleanup
+    echo "Cleaning up temporary files..."
+    rm -rf "$PROCESS_DIR"
+}
+
+# Main execution flow
+prepare_working_directory
+
+echo ""
+read -p "Ready to create video? [y/N] " response
+if [[ "$response" =~ ^[Yy]$ ]]; then
+    create_video
+else
+    echo "Exiting. You can modify durations in $WORK_DIR/tmp/durations.txt and run the script again."
+fi
